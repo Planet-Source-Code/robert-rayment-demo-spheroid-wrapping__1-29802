@@ -1,0 +1,293 @@
+     1                                  ;WrapRotate.asm  by Robert Rayment  14/12/01
+     2                                  
+     3                                  ; VB
+     4                                  ;
+     5                                  ; ReDim ixdent(PICH)
+     6                                  ; ReDim zrdsq(PICH)
+     7                                  ;
+     8                                  ; Spheroid radius
+     9                                  ; zR = 0.5 * PICW
+    10                                  ;
+    11                                  ;' Pre-calculate slice indentation & radius squared
+    12                                  ; For iy = 1 To PICH
+    13                                  ;   ixdent(iy) = zR - Sqr(iy * (2 * zR - iy)) + 2
+    14                                  ;   zrdsq(iy) = (0.5 * (PICW - 2 * ixdent(iy))) ^ 2
+    15                                  ; Next iy
+    16                                  ;
+    17                                  ; Source & destination x-centre coords
+    18                                  ; ixsc = PICW / 2
+    19                                  ; ixdc = PICW / 2
+    20                                  ;
+    21                                  ; Proportionality factor
+    22                                  ; zLsDpi = (PICW / 2) / pi#
+    23                                  ;
+    24                                  ; MCODE.PICW = PICW
+    25                                  ; MCODE.PICH = PICH
+    26                                  ; MCODE.ixsc = ixsc
+    27                                  ; MCODE.ixdc = ixdc
+    28                                  ; MCODE.zLsDpi = zLsDpi
+    29                                  ; MCODE.Ptrixdent = VarPtr(ixdent(1))
+    30                                  ; MCODE.Ptrzrdsq = VarPtr(zrdsq(1))
+    31                                  ; MCODE.PtrPalBGR = VarPtr(PalBGR(1, 1, 1, 1))
+    32                                  ;
+    33                                  ; ptrStruc = VarPtr(MCODE.PICW)
+    34                                  ; ptMC = VarPtr(WrapRotateMC(1))
+    35                                  ;
+    36                                  ; Done = False
+    37                                  ;
+    38                                  ; Do
+    39                                  ;
+    40                                  ; MCODE.ixsc = ixsc
+    41                                  ; MCODE.ixdc = ixdc
+    42                                  ;
+    43                                  ; ' Public Sub ASM_Rotate()
+    44                                  ; res = CallWindowProc(ptMC, ptrStruc, 0&, 0&, 0&)
+    45                                  ;
+    46                                  ; Loop
+    47                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+    48                                  ; Zero PalBGR(1,1,1,2) iy=PICH to 1
+    49                                  ;
+    50                                  ;For iy = PICH To 1 Step -1
+    51                                  ;
+    52                                  ;	ixlo = ixdent(iy)
+    53                                  ;	ixhi = PICW - ixdent(iy)
+    54                                  ;
+    55                                  ;	For ixd = ixlo To ixhi
+    56                                  ;         
+    57                                  ;      zddx = ixdc - ixd
+    58                                  ;         
+    59                                  ;      zy = Sqr(zrdsq(iy) - zddx * zddx)
+    60                                  ;      zx = zddx
+    61                                  ;      
+    62                                  ;      ztheta = zATan2(zy, zx)
+    63                                  ;      ixs = ixsc + zLsDpi * ztheta
+    64                                  ;      
+    65                                  ;      If ixs < 1 Then ixs = PICW + ixs
+    66                                  ;      If ixs > PICW Then ixs = ixs - PICW
+    67                                  ;      
+    68                                  ;      PalBGR(1, ixd, iy, 2) = PalBGR(1, ixs, iy, 1)
+    69                                  ;      PalBGR(2, ixd, iy, 2) = PalBGR(2, ixs, iy, 1)
+    70                                  ;      PalBGR(3, ixd, iy, 2) = PalBGR(3, ixs, iy, 1)
+    71                                  ;      PalBGR(4, ixd, iy, 2) = PalBGR(3, ixs, iy, 1)
+    72                                  ;   
+    73                                  ;   Next ixd
+    74                                  ;
+    75                                  ;Next iy
+    76                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+    77                                  
+    78                                  
+    79                                  %macro movab 2		; name & num of parameters
+    80                                    push dword %2		; 2nd param
+    81                                    pop dword %1		; 1st param
+    82                                  %endmacro			; use  movab %1,%2
+    83                                  ; Allows eg	movab bmW,[ebx+4]
+    84                                  
+    85                                  %define PICW            [ebp-4]
+    86                                  %define PICH            [ebp-8]
+    87                                  %define ixsc            [ebp-12]
+    88                                  %define ixdc            [ebp-16]
+    89                                  %define zLsDpi          [ebp-20]
+    90                                  %define Ptrixdent       [ebp-24]
+    91                                  %define Ptrzrdsq        [ebp-28]
+    92                                  %define PtrPalBGR       [ebp-32]
+    93                                  
+    94                                  
+    95                                  %define iy	  	 [ebp-40]   ; PICH To 1 Step -1
+    96                                  %define ixd    	 [ebp-44]   ; ixdent(iy) To PICW - ixdent(iy)
+    97                                  %define ixlo	 [ebp-48]	; ixdent(iy)
+    98                                  %define ixhi     [ebp-52]	; PICW - ixdent(iy)
+    99                                  %define zddx     [ebp-56]   ; zddx = ixdc - ixd	
+   100                                  %define zrdsq    [ebp-60]   ; zrdsq(iy)
+   101                                  %define zy	     [ebp-64]	; zy = Sqr(zrdsq(iy) - zddx * zddx)
+   102                                  %define zx	     [ebp-68]	; zddx
+   103                                  %define ztheta   [ebp-72]   ; ATAN (zy/zx)
+   104                                  %define ixs      [ebp-76]   ; ixs = ixsc + zLsDpi * ztheta
+   105                                  
+   106                                  %define PalSize    [ebp-80]
+   107                                  %define LineBytes  [ebp-84]
+   108                                  
+   109                                  
+   110                                  [bits 32]
+   111                                  
+   112 00000000 55                      	push ebp
+   113 00000001 89E5                    	mov ebp,esp
+   114 00000003 81EC54000000            	sub esp,84
+   115 00000009 57                      	push edi
+   116 0000000A 56                      	push esi
+   117 0000000B 53                      	push ebx
+   118                                  
+   119                                  	; Copy structure
+   120 0000000C 8B5D08                  	mov ebx,[ebp+8]
+   121                                  	
+   122                                  	movab PICW,          [ebx]
+   123 0000000F FF33                <1>   push dword %2
+   124 00000011 8F45FC              <1>   pop dword %1
+   125                                  	movab PICH,          [ebx+4]
+   126 00000014 FF7304              <1>   push dword %2
+   127 00000017 8F45F8              <1>   pop dword %1
+   128                                  	movab ixsc,          [ebx+8]
+   129 0000001A FF7308              <1>   push dword %2
+   130 0000001D 8F45F4              <1>   pop dword %1
+   131                                  	movab ixdc,          [ebx+12]
+   132 00000020 FF730C              <1>   push dword %2
+   133 00000023 8F45F0              <1>   pop dword %1
+   134                                  	movab zLsDpi,        [ebx+16]
+   135 00000026 FF7310              <1>   push dword %2
+   136 00000029 8F45EC              <1>   pop dword %1
+   137                                  	movab Ptrixdent,     [ebx+20]
+   138 0000002C FF7314              <1>   push dword %2
+   139 0000002F 8F45E8              <1>   pop dword %1
+   140                                  	movab Ptrzrdsq,      [ebx+24]
+   141 00000032 FF7318              <1>   push dword %2
+   142 00000035 8F45E4              <1>   pop dword %1
+   143                                  	movab PtrPalBGR,     [ebx+28]
+   144 00000038 FF731C              <1>   push dword %2
+   145 0000003B 8F45E0              <1>   pop dword %1
+   146                                  	
+   147 0000003E 8B45F8                  	mov eax,PICH
+   148 00000041 8B5DFC                  	mov ebx,PICW
+   149 00000044 F7E3                    	mul ebx
+   150 00000046 8945B0                  	mov PalSize,eax		; In 4 byte chunks
+   151                                  
+   152 00000049 8B75E0                  	mov esi,PtrPalBGR   ; esi = pts to PalBGR(1,1,1,1)
+   153 0000004C 56                      	push esi
+   154 0000004D 5F                      	pop edi
+   155 0000004E 8B45B0                  	mov eax,PalSize
+   156 00000051 C1E002                  	shl eax,2			; x4
+   157 00000054 01C7                    	add edi,eax			; edi pts to PalBGR(1,1,1,2) Blue
+   158                                  
+   159                                  	; Zero PalBGR(1,1,1,2) iy=PICH to 1
+   160                                  	;push edi
+   161                                  	;mov ecx,PalSize
+   162                                  	;xor eax,eax
+   163                                  	;rep STOSD			; PalBGR(1 to 4,ix=1 to PICW,iy=PICH to 1,2) = eax = 0
+   164                                  	;pop edi
+   165                                  
+   166                                  
+   167 00000056 8B45FC                  	mov eax,PICW
+   168 00000059 C1E002                  	shl eax,2			; x4
+   169 0000005C 8945AC                  	mov LineBytes,eax	; 4*PICW
+   170                                  
+   171 0000005F 8B5DF8                  	mov ebx,PICH
+   172 00000062 4B                      	dec ebx				; (PICH-1)
+   173 00000063 8B45AC                  	mov eax,LineBytes
+   174 00000066 F7E3                    	mul ebx				; LineBytes*(PICH-1)
+   175 00000068 01C6                    	add esi,eax			; esi = ptr PalBGR(1,1,iy,1)
+   176 0000006A 01C7                    	add edi,eax			; edi = ptr PalBGR(1,1,iy,2)
+   177                                  						; - LineBytes will point to iy-1
+   178 0000006C 8B4DF8                  	mov ecx,PICH
+   179                                  FIY:
+   180                                  	
+   181 0000006F 57                      	push edi
+   182 00000070 51                      	push ecx
+   183                                  
+   184 00000071 49                      	dec ecx
+   185 00000072 C1E102                  	shl ecx,2			; 4*(iy-1)
+   186 00000075 8B7DE8                  	mov edi,Ptrixdent
+   187 00000078 01CF                    	add edi,ecx
+   188 0000007A 8B07                    	mov eax,dword[edi]  ; ixlo = ixdent(iy)
+   189 0000007C 8945D0                  	mov ixlo,eax        ; ixlo = ixdent(iy)
+   190                                  	
+   191 0000007F 8B45FC                  	mov eax,PICW
+   192 00000082 2B45D0                  	sub eax,ixlo
+   193 00000085 8945CC                  	mov ixhi,eax		; ixhi = PICW - ixdebt(iy)
+   194                                  	
+   195 00000088 59                      	pop ecx				; back to iy
+   196 00000089 51                      	push ecx
+   197                                  	
+   198 0000008A 49                      	dec ecx
+   199 0000008B C1E102                  	shl ecx,2			; 4*(iy-1)
+   200 0000008E 8B7DE4                  	mov edi,Ptrzrdsq
+   201 00000091 01CF                    	add edi,ecx
+   202 00000093 8B07                    	mov eax,dword[edi]  ; zrdsq(iy)
+   203 00000095 8945C4                  	mov zrdsq,eax       ; zrdsq(iy)
+   204                                  
+   205 00000098 59                      	pop ecx				; back to iy
+   206 00000099 5F                      	pop edi				; edi = ptr  PalBGR(1,1,iy,2)
+   207                                  	
+   208 0000009A 51                      	push ecx
+   209                                  	
+   210 0000009B 8B4DD0                  	mov ecx,ixlo		; ecx=ixd
+   211                                  FIXD:
+   212                                  	
+   213 0000009E 8B45F0                  	mov eax,ixdc
+   214 000000A1 29C8                    	sub eax,ecx
+   215 000000A3 8945C8                  	mov zddx,eax		; zddx=ixdc-ixd
+   216                                  	
+   217                                      ; Calc ztheta = zATan2(zy, zx)
+   218                                  	; where  zy = Sqr(zrdsq(iy) - zddx * zddx)
+   219                                  	;        zx = zddx
+   220 000000A6 D945C4                  	fld dword zrdsq
+   221 000000A9 DB45C8                  	fild dword zddx
+   222 000000AC DB45C8                  	fild dword zddx
+   223 000000AF DEC9                    	fmulp st1
+   224 000000B1 DEE9                    	fsubp st1
+   225 000000B3 D9FA                    	fsqrt
+   226 000000B5 DB45C8                  	fild dword zddx	; zx | zy
+   227 000000B8 D9F3                    	fpatan			; ztheta
+   228                                  	; Calc ixs = ixsc + zLsDpi * ztheta
+   229 000000BA D945EC                  	fld dword zLsDpi
+   230 000000BD DEC9                    	fmulp st1
+   231 000000BF DB45F4                  	fild dword ixsc
+   232 000000C2 DEC1                    	faddp st1
+   233 000000C4 DB5DB4                  	fistp dword ixs
+   234                                  	
+   235                                  	; Keep ixs in range
+   236 000000C7 8B5DFC                  	mov ebx,PICW
+   237                                  	
+   238 000000CA 8B45B4                  	mov eax,ixs
+   239 000000CD 3D01000000              	cmp eax,1
+   240 000000D2 7D07                    	jge tGTPICW
+   241 000000D4 01D8                    	add eax,ebx		; PICW+ixs
+   242 000000D6 E907000000              	jmp ixsOK
+   243                                  tGTPICW:
+   244 000000DB 3B45FC                  	cmp eax,PICW
+   245 000000DE 7E02                    	jle ixsOK
+   246 000000E0 29D8                    	sub eax,ebx		; ixs-PICW
+   247                                  ixsOK:
+   248                                  	
+   249                                  	; PalBGR(,,,1) to PalBGR(,,,2)
+   250                                  	; eax=ixs
+   251                                  	; ecx=ixd
+   252                                  	; edi = ptr PalBGR(1,1,iy,2)
+   253                                  	; esi = ptr PalBGR(1,1,iy,1)
+   254                                  	
+   255 000000E2 57                      	push edi
+   256 000000E3 56                      	push esi
+   257                                  	
+   258 000000E4 48                      	dec eax
+   259 000000E5 C1E002                  	shl eax,2		; 4*(ixs-1)
+   260 000000E8 01C6                    	add esi,eax
+   261 000000EA 89C8                    	mov eax,ecx
+   262 000000EC 48                      	dec eax
+   263 000000ED C1E002                  	shl eax,2		; 4*(ixd-1)
+   264 000000F0 01C7                    	add edi,eax
+   265                                  	
+   266 000000F2 A5                      	movsd			; [esi]->[edi]
+   267                                  	
+   268 000000F3 5E                      	pop esi
+   269 000000F4 5F                      	pop edi
+   270                                  	
+   271 000000F5 41                      	inc ecx
+   272 000000F6 3B4DCC                  	cmp ecx,ixhi
+   273 000000F9 0F8E9FFFFFFF            	jle near FIXD
+   274                                  	
+   275                                  	; move esi & edi to next iy
+   276 000000FF 8B45AC                  	mov eax,LineBytes
+   277 00000102 29C6                    	sub esi,eax
+   278 00000104 29C7                    	sub edi,eax
+   279                                  	
+   280                                  
+   281 00000106 59                      	pop ecx
+   282 00000107 49                      	dec ecx
+   283 00000108 0F8561FFFFFF            	jnz near FIY
+   284                                  
+   285                                  GETOUT:
+   286 0000010E 5B                      	pop ebx
+   287 0000010F 5E                      	pop esi
+   288 00000110 5F                      	pop edi
+   289 00000111 89EC                    	mov esp,ebp
+   290 00000113 5D                      	pop ebp
+   291 00000114 C21000                  	ret 16
+   292                                  
+   293                                  ;############################################################
